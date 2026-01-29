@@ -2,7 +2,7 @@
 
 client_id = "c881b094661c52a30001ed86adf28db9"
 name = "Video Message App UAT"
-application_url = "https://example.com"
+application_url = "https://db-video-message-app-83fa96891ebf.herokuapp.com/"
 embedded = true
 
 [build]
