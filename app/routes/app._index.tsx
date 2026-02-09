@@ -72,7 +72,8 @@ export default function Index() {
                         : ""}
                     </s-table-cell>
                     <s-table-cell>
-                      {order.messageStatus === "RECORDED" ? (
+                      {order.messageStatus === "RECORDED" ||
+                      order.messageStatus === "OPENED" ? (
                         <s-icon type="check-circle" tone="success" />
                       ) : (
                         <s-icon type="x-circle" tone="critical" />
