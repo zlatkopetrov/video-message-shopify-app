@@ -1,250 +1,161 @@
-import { useEffect } from "react";
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
-import { boundary } from "@shopify/shopify-app-react-router/server";
+import { Order } from 'app/utils/types';
+import { useEffect, useState } from 'react';
 
+import { boundary } from '@shopify/shopify-app-react-router/server';
+
+import { authenticate } from '../shopify.server';
+
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 
   return null;
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
-
-  return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-  };
-};
-
 export default function Index() {
-  const fetcher = useFetcher<typeof action>();
-
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
+  const [orders, setOrders] = useState<Array<Order>>([]);
+  const [selectedMessage, setSelectedMessage] = useState<Order | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
+    const getOrders = async () => {
+      const response = await fetch(`${process.env.API_BASE_URL}/fetchOrders`);
+      const data = (await response.json()) as { orders: Array<Order> };
+      setOrders(data.orders);
+    };
+    getOrders();
+  }, []);
 
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage) return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${process.env.API_BASE_URL}/deleteMessage`,
+        {
+          method: "POST",
+          body: JSON.stringify({ orderId: selectedMessage.id }),
+        },
+      );
+      if (response.ok) {
+        const response = await fetch(`${process.env.API_BASE_URL}/fetchOrders`);
+        const data = (await response.json()) as { orders: Array<Order> };
+        setOrders(data.orders);
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      setLoading(false);
+      return;
+    }
+  };
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
-      </s-button>
-
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
+    <s-page heading="Video Message App">
+      <s-section heading="List of orders with video message">
+        <s-table>
+          <s-table-header-row>
+            <s-table-header listSlot="primary">Order #</s-table-header>
+            <s-table-header listSlot="secondary">Order Created</s-table-header>
+            <s-table-header listSlot="labeled">Recorded</s-table-header>
+            <s-table-header listSlot="labeled">Opened</s-table-header>
+            <s-table-header></s-table-header>
+          </s-table-header-row>
+          <s-table-body>
+            {orders.length > 0
+              ? orders.map((order, index) => (
+                  <s-table-row key={index}>
+                    <s-table-cell>{order.orderName}</s-table-cell>
+                    <s-table-cell>
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString()
+                        : ""}
+                    </s-table-cell>
+                    <s-table-cell>
+                      {order.messageStatus === "RECORDED" ||
+                      order.messageStatus === "OPENED" ? (
+                        <s-icon type="check-circle" tone="success" />
+                      ) : (
+                        <s-icon type="x-circle" tone="critical" />
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>
+                      {order.messageStatus === "OPENED" ? (
+                        <s-icon type="check-circle" tone="success" />
+                      ) : (
+                        <s-icon type="x-circle" tone="critical" />
+                      )}
+                    </s-table-cell>
+                    <s-table-cell>
+                      <s-button
+                        icon="edit"
+                        variant="tertiary"
+                        commandFor="video-modal"
+                        accessibilityLabel="Edit Video Message Details"
+                        onClick={() => setSelectedMessage(order)}
+                      />
+                    </s-table-cell>
+                  </s-table-row>
+                ))
+              : null}
+          </s-table-body>
+        </s-table>
       </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references.
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
+
+      <s-modal
+        id="video-modal"
+        heading="View Details"
+        accessibilityLabel="View Video Message Details"
+      >
+        <s-grid gridTemplateColumns="repeat(2, 1fr)" gap="small">
+          <s-grid-item gridColumn="span 1">
+            <s-text-field
+              value={selectedMessage?.firstName || ""}
+              label="First Name"
+              labelAccessibilityVisibility="visible"
+              disabled
+            />
+          </s-grid-item>
+          <s-grid-item gridColumn="span 1">
+            <s-text-field
+              value={selectedMessage?.lastName || ""}
+              label="Last Name"
+              labelAccessibilityVisibility="visible"
+              disabled
+            />
+          </s-grid-item>
+
+          <s-grid-item gridColumn="span 1">
+            <s-text-field
+              value={selectedMessage?.customerEmail || ""}
+              label="Email"
+              labelAccessibilityVisibility="visible"
+              disabled
+            />
+          </s-grid-item>
+
+          <s-grid-item gridColumn="span 1">
+            <s-text-field
+              value={selectedMessage?.orderName || ""}
+              label="Order #"
+              labelAccessibilityVisibility="visible"
+              disabled
+            />
+          </s-grid-item>
+
+          {selectedMessage?.messageStatus === "RECORDED" ? (
+            <s-grid-item gridColumn="span 2">
+              <s-button
+                accessibilityLabel="Delete Video Message"
+                onClick={handleDeleteMessage}
+                loading={loading}
               >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre style={{ margin: 0 }}>
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
-        )}
-      </s-section>
-
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
-
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
-        </s-unordered-list>
-      </s-section>
+                Delete video message
+              </s-button>
+            </s-grid-item>
+          ) : null}
+        </s-grid>
+      </s-modal>
     </s-page>
   );
 }

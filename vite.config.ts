@@ -1,6 +1,7 @@
-import { reactRouter } from "@react-router/dev/vite";
-import { defineConfig, type UserConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig, type, UserConfig } from 'vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+import { reactRouter } from '@react-router/dev/vite';
 
 // Related: https://github.com/remix-run/remix/issues/2835#issuecomment-1144102176
 // Replace the HOST env var with SHOPIFY_APP_URL so that it doesn't break the Vite server.
@@ -48,14 +49,14 @@ export default defineConfig({
       allow: ["app", "node_modules"],
     },
   },
-  plugins: [
-    reactRouter(),
-    tsconfigPaths(),
-  ],
+  plugins: [reactRouter(), tsconfigPaths()],
   build: {
     assetsInlineLimit: 0,
   },
   optimizeDeps: {
     include: ["@shopify/app-bridge-react"],
+  },
+  define: {
+    "process.env.API_BASE_URL": JSON.stringify(process.env.API_BASE_URL),
   },
 }) satisfies UserConfig;
