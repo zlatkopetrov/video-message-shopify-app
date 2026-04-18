@@ -1,13 +1,12 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "359adcbe30aa31dc2d76b50ce441bfd5"
-name = "video-message-app"
-application_url = "https://example.com"
+client_id = "5b9275b7c4f5cd55c81928a7f4b0ff2e"
+name = "Video Message App"
+application_url = "https://db-video-message-app-prod-582b27bad85d.herokuapp.com/"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2026-01"
